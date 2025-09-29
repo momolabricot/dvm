@@ -1,0 +1,16 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "mysql"; url = env("DATABASE_URL") }
+model users { id BigInt @id @default(autoincrement()) role users_role email String @unique phone String? password_hash String twofa_secret String? created_at DateTime @default(now()) clients clients? convoyeurs convoyeurs? audit_logs audit_logs[] }
+model clients { id BigInt @id @default(autoincrement()) user_id BigInt @unique company_name String? siret String? pricing_policy_json Json @default("{}") users users @relation(fields:[user_id], references:[id]) quotes quotes[] missions missions[] }
+model convoyeurs { id BigInt @id @default(autoincrement()) user_id BigInt @unique active Boolean @default(true) users users @relation(fields:[user_id], references:[id]) missions missions[] }
+model tariffs { id BigInt @id @default(autoincrement()) name String grid_json Json active Int @default(1) updated_by BigInt updated_at DateTime @default(now()) @updatedAt users users @relation(fields:[updated_by], references:[id]) }
+model quotes { id BigInt @id @default(autoincrement()) quote_no String @unique client_id BigInt? payload_json Json distance_km Decimal @db.Decimal(10,2) price_ht Decimal @db.Decimal(10,2) tva Decimal @db.Decimal(10,2) price_ttc Decimal @db.Decimal(10,2) pdf_url String created_at DateTime @default(now()) clients clients? @relation(fields:[client_id], references:[id]) }
+model missions { id BigInt @id @default(autoincrement()) client_id BigInt convoyeur_id BigInt? status missions_status @default(A_attribuer) pickup_address String dropoff_address String pickup_time DateTime? dropoff_time DateTime? vehicle_type missions_vehicle_type plate String option missions_option notes String? created_at DateTime @default(now()) clients clients @relation(fields:[client_id], references:[id]) convoyeurs convoyeurs? @relation(fields:[convoyeur_id], references:[id]) }
+model audit_logs { id BigInt @id @default(autoincrement()) actor_user_id BigInt action String entity String entity_id BigInt? diff_json Json created_at DateTime @default(now()) users users @relation(fields:[actor_user_id], references:[id]) }
+model emails { id BigInt @id @default(autoincrement()) to_addr String subject String status emails_status retries Int @default(0) meta_json Json created_at DateTime @default(now()) }
+model counters { counter_date DateTime @id value Int }
+enum users_role { client admin it_admin convoyeur }
+enum missions_status { A_attribuer Assignee En_cours Terminee Annulee }
+enum missions_vehicle_type { citadine berline utilitaire vl_plateau }
+enum missions_option { convoyeur plateau }
+enum emails_status { queued sent failed }
