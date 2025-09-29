@@ -1,0 +1,7 @@
+<!doctype html><html lang="fr"><body style="font-family:Arial,sans-serif;color:#111827">
+  <h2 style="color:#1756FF">Votre devis <%= quoteNo %></h2>
+  <p>Bonjour <%= client.prenom %> <%= client.nom %>,</p>
+  <p>Merci pour votre demande. Vous trouverez votre devis en pièce jointe.</p>
+  <p><b>Total TTC:</b> <%= pricing.price_ttc.toFixed(2) %> € — Distance: <%= pricing.distance_km.toFixed(2) %> km</p>
+  <p>DN Mobility</p>
+</body></html>

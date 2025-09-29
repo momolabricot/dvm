@@ -1,0 +1,6 @@
+<!doctype html><html lang="fr"><body style="font-family:Arial,sans-serif;color:#111827">
+  <h3>Nouveau devis <%= quoteNo %></h3>
+  <p>Client: <%= client.prenom %> <%= client.nom %> — <%= client.email %> — <%= client.telephone %></p>
+  <p>Option: <%= details.option %> — Véhicule: <%= details.vehicle_type %> — Plaque: <%= details.plate %></p>
+  <p>Total TTC: <%= pricing.price_ttc.toFixed(2) %> €</p>
+</body></html>

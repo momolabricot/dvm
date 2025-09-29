@@ -1,0 +1,38 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><style>
+body{font-family:Arial,Helvetica,sans-serif;color:#111827}
+.h{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:12px}
+.box{border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:8px 0}
+.tt{font-size:20px;color:#1756FF}
+table{width:100%;border-collapse:collapse}
+td,th{padding:6px;border-bottom:1px solid #eee;text-align:left}
+small{color:#6b7280}
+</style></head><body>
+  <div class="h">
+    <div>
+      <div class="tt">DN Mobility</div>
+      <div>SIRET: <%= siret %></div>
+      <div><%= companyAddress %></div>
+    </div>
+    <div>
+      Devis <b><%= quoteNo %></b><br/>Date: <%= date %><br/>Validité: 30 jours
+    </div>
+  </div>
+  <div class="box"><b>Client</b><br/>
+    <%= client.prenom %> <%= client.nom %><br/>
+    <%= client.email %> — <%= client.telephone %>
+  </div>
+  <div class="box"><b>Détails du trajet</b><br/>
+    <div>Véhicule: <%= details.vehicle_type %> — Option: <%= details.option %> — Plaque: <%= details.plate %></div>
+    <pre><%= JSON.stringify(details, null, 2) %></pre>
+  </div>
+  <div class="box"><b>Tarification</b>
+    <table><tbody>
+      <tr><td>Distance totale</td><td><%= pricing.distance_km.toFixed(2) %> km</td></tr>
+      <tr><td>Total HT</td><td><%= pricing.price_ht.toFixed(2) %> €</td></tr>
+      <tr><td>TVA 20%</td><td><%= pricing.tva.toFixed(2) %> €</td></tr>
+      <tr><td><b>Total TTC</b></td><td><b><%= pricing.price_ttc.toFixed(2) %> €</b></td></tr>
+    </tbody></table>
+  </div>
+  <p><small>Conditions: Prix indicatif selon données fournies. Paiement non disponible en ligne. Mentions légales & RGPD sur le site.</small></p>
+  <div style="text-align:center;color:#6b7280;font-size:12px">DN Mobility — Contact: <%= mailFrom %></div>
+</body></html>
