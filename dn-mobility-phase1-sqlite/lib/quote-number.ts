@@ -1,12 +1,22 @@
-import { prisma } from './db'
-export async function nextQuoteNo(){
+// lib/quote-number.ts
+import { prisma } from '@/lib/prisma'
+
+export async function nextQuoteNumber() {
   const now = new Date()
-  const ymd = now.toISOString().slice(0,10).replaceAll('-','')
-  const dateKey = new Date(ymd + 'T00:00:00.000Z')
-  const val = await prisma.$transaction(async (tx)=>{
-    await tx.counters.upsert({ where:{ counter_date: dateKey }, create:{ counter_date: dateKey, value: 0 }, update:{} })
-    const updated = await tx.counters.update({ where:{ counter_date: dateKey }, data: { value: { increment: 1 } } })
-    return updated.value
+  // Date "jour" sans l’heure pour la clé primaire
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yyyymmdd = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('')
+
+  const counter = await prisma.counter.upsert({
+    where: { counter_date: day },
+    create: { counter_date: day, value: 1 },
+    update: { value: { increment: 1 } },
   })
-  return `DNM-${ymd}-${String(val).padStart(4,'0')}`
+
+  const seq = String(counter.value).padStart(4, '0')
+  return `DNM-${yyyymmdd}-${seq}`
 }

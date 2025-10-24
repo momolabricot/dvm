@@ -1,108 +1,150 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "sqlite"; url = env("DATABASE_URL") }
-
-model users {
-  id            BigInt   @id @default(autoincrement())
-  role          users_role
-  email         String   @unique
-  phone         String?
-  password_hash String
-  twofa_secret  String?
-  created_at    DateTime @default(now())
-  clients       clients?
-  convoyeurs    convoyeurs?
-  audit_logs    audit_logs[]
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
 }
 
-model clients {
-  id                  BigInt   @id @default(autoincrement())
-  user_id             BigInt   @unique
-  company_name        String?
-  siret               String?
-  pricing_policy_json Json     @default("{}")
-  users               users    @relation(fields: [user_id], references: [id])
-  quotes              quotes[]
-  missions            missions[]
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
-model convoyeurs {
-  id       BigInt  @id @default(autoincrement())
-  user_id  BigInt  @unique
-  active   Boolean @default(true)
-  users    users   @relation(fields: [user_id], references: [id])
-  missions missions[]
+//////////////////////
+// ENUMS
+//////////////////////
+
+enum Role {
+  ADMIN
+  ADMIN_IT
+  CLIENT
+  CONVOYEUR
 }
 
-model tariffs {
-  id         BigInt   @id @default(autoincrement())
-  name       String
-  grid_json  Json
-  active     Int      @default(1)
-  updated_by BigInt
-  updated_at DateTime @default(now()) @updatedAt
-  users      users    @relation(fields: [updated_by], references: [id])
+enum MissionStatus {
+  DRAFT
+  PLANNED
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  CANCELED
 }
 
-model quotes {
-  id          BigInt   @id @default(autoincrement())
-  quote_no    String   @unique
-  client_id   BigInt?
-  payload_json Json
-  distance_km Decimal
-  price_ht    Decimal
-  tva         Decimal
-  price_ttc   Decimal
-  pdf_url     String
-  created_at  DateTime @default(now())
-  clients     clients? @relation(fields: [client_id], references: [id])
+enum PayoutStatus {
+  PENDING
+  PAID
+  CANCELED
 }
 
-model missions {
-  id             BigInt               @id @default(autoincrement())
-  client_id      BigInt
-  convoyeur_id   BigInt?
-  status         missions_status      @default(A_attribuer)
-  pickup_address String
-  dropoff_address String
-  pickup_time    DateTime?
-  dropoff_time   DateTime?
-  vehicle_type   missions_vehicle_type
-  plate          String
-  option         missions_option
-  notes          String?
-  created_at     DateTime @default(now())
-  clients        clients  @relation(fields: [client_id], references: [id])
-  convoyeurs     convoyeurs? @relation(fields: [convoyeur_id], references: [id])
+//////////////////////
+// MODELS
+//////////////////////
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  phone        String?
+  role         Role     @default(CLIENT)
+
+  // Auth simple
+  passwordHash String?
+
+  // Statut compte
+  isActive     Boolean  @default(true)
+
+  // Audit
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Qui a créé ce compte
+  createdById  String?
+  createdBy    User?    @relation("UsersCreator", fields: [createdById], references: [id])
+  createdUsers User[]   @relation("UsersCreator")
+
+  // Profils associés (1–1)
+  clientProfile    ClientProfile?
+  convoyeurProfile ConvoyeurProfile?
+
+  // Missions créées (admin / admin_it)
+  missionsCreated Mission[] @relation("MissionsCreatedBy")
 }
 
-model audit_logs {
-  id            BigInt   @id @default(autoincrement())
-  actor_user_id BigInt
-  action        String
-  entity        String
-  entity_id     BigInt?
-  diff_json     Json
-  created_at    DateTime @default(now())
-  users         users    @relation(fields: [actor_user_id], references: [id])
+model ClientProfile {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+
+  companyName String?
+  vatNumber   String?
+  address     String?
+
+  priceFactor Float    @default(1.0)  // multiplicateur de prix client
+  isActive    Boolean  @default(true) // client actif/inactif
+
+  quotes   Quote[]
+  missions Mission[]
 }
 
-model emails {
-  id         BigInt   @id @default(autoincrement())
-  to_addr    String
-  subject    String
-  status     emails_status
-  retries    Int      @default(0)
-  meta_json  Json
-  created_at DateTime @default(now())
+model ConvoyeurProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+
+  iban       String?
+  ratePerKm  Float?
+
+  missions   Mission[]      @relation("ConvoyeurMissions")
 }
 
-model counters {
+model Quote {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  createdAt DateTime @default(now())
+
+  // lien (facultatif) vers le client si reconnu
+  clientId  String?
+  client    ClientProfile? @relation(fields: [clientId], references: [id])
+
+  // (éventuelle) relation 1-1 vers mission
+  mission   Mission?  @relation("QuoteMission")
+}
+
+model Mission {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  title         String
+  description   String?
+
+  clientId      String
+  client        ClientProfile  @relation(fields: [clientId], references: [id])
+
+  // 1-1: FK unique vers quote
+  quoteId       String?  @unique
+  quote         Quote?   @relation("QuoteMission", fields: [quoteId], references: [id])
+
+  assignedToId  String?
+  assignedTo    ConvoyeurProfile? @relation("ConvoyeurMissions", fields: [assignedToId], references: [id])
+
+  scheduledAt    DateTime?
+  pickupAddress  String
+  dropoffAddress String
+  distanceKm     Float?
+
+  // Prix visibles client + interne convoyeur
+  clientPriceTTC Float?
+  payoutAmount   Float?
+  payoutStatus   PayoutStatus?  @default(PENDING)
+
+  status         MissionStatus  @default(DRAFT)
+
+  createdById   String?
+  createdBy     User?          @relation("MissionsCreatedBy", fields: [createdById], references: [id])
+}
+
+model Counter {
   counter_date DateTime @id
-  value        Int
-}
+  value        Int      @default(0)
 
-enum users_role { client admin it_admin convoyeur }
-enum missions_status { A_attribuer Assignee En_cours Terminee Annulee }
-enum missions_vehicle_type { citadine berline utilitaire vl_plateau }
-enum missions_option { convoyeur plateau }
-enum emails_status { queued sent failed }
+  @@map("counters")
+}

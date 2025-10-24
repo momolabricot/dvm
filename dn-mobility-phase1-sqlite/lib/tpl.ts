@@ -1,10 +1,10 @@
 import ejs from 'ejs'
 import path from 'path'
-export async function renderEJS(templateRelPath: string, data: any){
-  const file = path.join(process.cwd(), templateRelPath)
-  return new Promise<string>((resolve, reject)=>{
-    ejs.renderFile(file, data, {async:false}, (err, str)=>{
-      if(err) reject(err); else resolve(str)
-    })
-  })
+
+export async function renderEJS(
+  relPath: string,
+  data: Record<string, unknown>
+): Promise<string> {
+  const fullPath = path.isAbsolute(relPath) ? relPath : path.join(process.cwd(), relPath)
+  return await ejs.renderFile(fullPath, data, { rmWhitespace: true })
 }

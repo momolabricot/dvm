@@ -1,19 +1,44 @@
-export type Grid = {
-  vehicle_types: Record<'citadine'|'berline'|'utilitaire'|'vl_plateau', {per_km:number}>;
-  option_multiplier: Record<'convoyeur'|'plateau', number>;
-  rounding: {mode: 'ceil_to_cent'};
+// lib/pricing.ts
+
+export type SimInput = {
+  vehicle_type: 'citadine' | 'berline' | 'utilitaire' | 'vl_plateau'
+  option: 'convoyeur' | 'plateau'
+  round_trip: boolean
 }
-export const defaultGrid: Grid = {
-  vehicle_types: { citadine:{per_km:0.70}, berline:{per_km:0.85}, utilitaire:{per_km:1.00}, vl_plateau:{per_km:1.20} },
-  option_multiplier: {convoyeur:1.0, plateau:1.25},
-  rounding: {mode:'ceil_to_cent'}
+
+type BasePricing = {
+  base: number
+  perKm: number
 }
-export function ceilToCent(n:number){ return Math.ceil(n*100)/100 }
-export function computePrice(grid:Grid, km:number, v:keyof Grid['vehicle_types'], opt:keyof Grid['option_multiplier']){
-  const base = grid.vehicle_types[v].per_km
-  const k = grid.option_multiplier[opt]
-  const price_ht = ceilToCent(km * base * k)
-  const tva = ceilToCent(price_ht * 0.20)
-  const price_ttc = +(price_ht + tva).toFixed(2)
-  return {price_ht, tva, price_ttc, base_rate: base, option_k: k}
+
+const BASES: Record<SimInput['vehicle_type'], BasePricing> = {
+  citadine:   { base: 25, perKm: 0.8 },
+  berline:    { base: 30, perKm: 0.95 },
+  utilitaire: { base: 35, perKm: 1.1 },
+  vl_plateau: { base: 45, perKm: 1.5 },
+}
+
+export function pricingForKm(km: number, sim: SimInput, clientFactor = 1.0) {
+  const p = BASES[sim.vehicle_type] ?? BASES.citadine
+  let ht = p.base + p.perKm * km
+
+  // option plateau = majoration simple (exemple)
+  if (sim.option === 'plateau') ht *= 1.25
+
+  // aller-retour : on peut décider d'un coeff (exemple = *1.8)
+  if (sim.round_trip) ht *= 1.8
+
+  ht = ht * clientFactor
+
+  const tva = ht * 0.2
+  const ttc = ht + tva
+  return {
+    price_ht: round2(ht),
+    tva: round2(tva),
+    price_ttc: round2(ttc),
+  }
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100
 }

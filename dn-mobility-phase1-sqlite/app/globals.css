@@ -1,8 +1,35 @@
-@tailwind base; @tailwind components; @tailwind utilities;
-:root{ --blue:#1756FF; --gray-900:#111827; --gray-700:#374151; --gray-400:#9CA3AF; --gray-100:#F3F4F6; }
-.btn{ @apply bg-primary text-white rounded-2xl px-5 py-3 font-medium hover:opacity-90; }
-.input{ @apply border border-gray-300 rounded-xl px-4 py-2 w-full; }
-.label{ @apply text-sm text-gray-700; }
-.card{ @apply bg-white shadow-lg rounded-2xl p-6; }
-body{ @apply bg-gray100 text-gray900; }
-a{ @apply text-primary underline-offset-2 hover:underline; }
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* UNIQUEMENT du CSS standard ici, pas de @apply pour l’instant */
+:root {
+  --ink-900: #0f172a;
+  --brand: #0ea5e9;
+}
+
+html, body {
+  background: #ffffff;
+  color: var(--ink-900);
+}
+
+/* utilitaires sans @apply */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem; font-weight: 500;
+  background: var(--brand); color: #fff;
+  transition: background-color .15s ease;
+}
+.btn:hover { background: #0284c7; }
+.btn:disabled { opacity:.6; cursor:not-allowed; }
+
+.card {
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+

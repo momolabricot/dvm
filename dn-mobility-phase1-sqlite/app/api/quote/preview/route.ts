@@ -1,31 +1,53 @@
+// app/api/quote/preview/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { rateLimit, ipFromHeaders } from '@/lib/ratelimit'
-import { QuoteInput } from '@/lib/validators'
-import { drivingDistanceKm } from '@/lib/distance'
-import { computePrice, defaultGrid } from '@/lib/pricing'
+import { QuotePreviewInput } from '@/lib/validators'
+import { computeDistanceKm } from '@/lib/distance'
+import { pricingForKm } from '@/lib/pricing'
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth' // ⚠️ PAS "@/auth", bien "@/lib/auth"
 
-function unflatten(obj:any){
-  const out:any = {}
-  for(const [k,v] of Object.entries(obj)){
-    const keys = k.split('.'); let cur = out
-    for(let i=0;i<keys.length-1;i++){ cur[keys[i]] = cur[keys[i]] || {}; cur = cur[keys[i]] }
-    cur[keys.at(-1)!] = v
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  const parsed = QuotePreviewInput.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
-  return out
-}
 
-export async function POST(req: NextRequest){
-  const rl = rateLimit(ipFromHeaders(req.headers)+'::quote_preview');
-  if(!rl.ok) return NextResponse.json({error:'Trop de requêtes', retryAfter: rl.retryAfter}, {status:429})
-  const body = await req.json()
-  const parsed = QuoteInput.safeParse(unflatten(body))
-  if(!parsed.success) return NextResponse.json({error: parsed.error.flatten()}, {status:400})
-  const d = parsed.data
-  let km = 0
-  const legs = [{a:d.depart, b:d.arrivee}]
-  if(d.round_trip && d.retour_depart && d.retour_arrivee) legs.push({a:d.retour_depart, b:d.retour_arrivee})
-  for(const leg of legs){ km += await drivingDistanceKm({lat:leg.a.lat,lon:leg.a.lon},{lat:leg.b.lat,lon:leg.b.lon}) }
-  km = Math.round(km*100)/100
-  const pricing = computePrice(defaultGrid, km, d.vehicle_type as any, d.option as any)
-  return NextResponse.json({ distance_km: km, ...pricing })
+  // ➜ corriger les champs null -> undefined pour coller au type DistanceInput
+  const sim = parsed.data
+  const distanceInput = {
+    ...sim,
+    retour_depart: sim.retour_depart || undefined,
+    retour_arrivee: sim.retour_arrivee || undefined,
+  }
+
+  const km = await computeDistanceKm(distanceInput)
+
+  // Récupère la session et applique le priceFactor client si dispo
+  let priceFactor = 1.0
+  try {
+    const session = await auth()
+    const email = session?.user?.email
+    if (email) {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          role: true,
+          clientProfile: { select: { priceFactor: true, isActive: true } },
+        },
+      })
+      if (user?.role === 'CLIENT' && user.clientProfile?.isActive) {
+        priceFactor = user.clientProfile.priceFactor ?? 1.0
+      }
+    }
+  } catch {
+    // pas bloquant
+  }
+
+  const { price_ht, tva, price_ttc } = pricingForKm(km, sim, { priceFactor })
+
+  return NextResponse.json({
+    distance_km: km,
+    price_ht, tva, price_ttc,
+  })
 }
