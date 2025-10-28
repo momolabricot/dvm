@@ -48,11 +48,11 @@ export async function saveQuoteAndEmail(
   // 1) Numéro de devis unique
   const quote_no = await nextQuoteNumber()
 
-  // 1bis) Tenter de lier le devis au client existant par email
-  let clientId: string | undefined = undefined
+  // 1bis) Lier le devis à un client existant via l'email si possible
+  let clientId: string | undefined
   const existing = await prisma.user.findUnique({
     where: { email: contact.email },
-    select: { clientProfile: { select: { id: true, isActive: true } } }
+    select: { clientProfile: { select: { id: true, isActive: true } } },
   })
   if (existing?.clientProfile?.isActive) {
     clientId = existing.clientProfile.id
@@ -115,12 +115,17 @@ export async function saveQuoteAndEmail(
   </table>
 </body></html>`
 
-  // 3) PDF temporaire
+  // 3) PDF temporaire (dans /tmp)
   const filename = `devis-${quote_no}.pdf`
   const outPath = path.join(os.tmpdir(), filename)
+
+  // Génère le PDF et ATTEND l'écriture disque
   await renderQuotePDF(html, outPath)
 
-  // 3bis) Enregistrer le devis en BDD (lié au client si trouvé)
+  // Double-check d'existence (belt & suspenders)
+  await fs.access(outPath)
+
+  // 3bis) Enregistrer le devis en BDD
   await prisma.quote.create({
     data: {
       number: quote_no,
@@ -141,6 +146,7 @@ export async function saveQuoteAndEmail(
     { filename, path: outPath, contentType: 'application/pdf' },
   ])
 
+  // Nettoyage silencieux
   try { await fs.unlink(outPath) } catch {}
 
   return quote_no

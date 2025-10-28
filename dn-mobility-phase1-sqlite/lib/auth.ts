@@ -1,43 +1,39 @@
 // lib/auth.ts
-import { getServerSession } from 'next-auth'
-import type { NextRequest } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getServerSession, type NextAuthOptions } from 'next-auth'
+import { NextResponse } from 'next/server'
 
-// ⚠️ Adapte ce chemin si ton fichier NextAuth est ailleurs
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+// On ré-exporte les options de NextAuth depuis la route API
+// pour permettre `import { authOptions } from '@/lib/auth'`
+import { authOptions as _authOptions } from '@/app/api/auth/[...nextauth]/route'
 
-type Role = 'ADMIN' | 'ADMIN_IT' | 'CLIENT' | 'CONVOYEUR'
+export const authOptions: NextAuthOptions = _authOptions as NextAuthOptions
 
-export async function getSessionUser() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email) return null
-
-  // On charge l’utilisateur depuis la DB pour récupérer son rôle, id, état…
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      name: true,
-      isActive: true,
-    },
-  })
-
-  if (!user || !user.isActive) {
-    return null
-  }
-
-  return user
+export async function auth() {
+  return getServerSession(authOptions)
 }
 
 /**
- * Exige une session + un rôle parmi `allowed`.
- * - Lève une exception si non autorisé (à gérer dans la route appelante).
+ * Helpers role-based (compatibles avec ce que tu utilises déjà)
  */
-export async function requireRole(allowed: Role[]) {
-  const user = await getSessionUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
-  if (!allowed.includes(user.role as Role)) throw new Error('FORBIDDEN')
-  return user
+export type Role = 'ADMIN' | 'ADMIN_IT' | 'CLIENT' | 'CONVOYEUR'
+
+export async function requireRole(roles: Role[] | Role) {
+  const allow = Array.isArray(roles) ? roles : [roles]
+  const session = await auth()
+  const role = (session?.user as any)?.role as Role | undefined
+  if (!session || !role || !allow.includes(role)) {
+    const err = new Error(!session ? 'UNAUTHORIZED' : 'FORBIDDEN')
+    throw err
+  }
+}
+
+export async function getSessionUser() {
+  const session = await auth()
+  if (!session?.user?.email) return null
+  return {
+    id: (session.user as any).id ?? null,
+    email: session.user.email,
+    name: session.user.name ?? null,
+    role: (session.user as any).role ?? null,
+  }
 }

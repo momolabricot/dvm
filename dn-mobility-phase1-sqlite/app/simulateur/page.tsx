@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 
 type PreviewResult = {
-  distance_km: number
-  price_ht: number
-  tva: number
-  price_ttc: number
+  distance_km: number | null
+  price_ht: number | null
+  tva: number | null
+  price_ttc: number | null
 }
 
 export default function SimulateurPage() {
@@ -199,54 +199,64 @@ export default function SimulateurPage() {
       </form>
 
       {/* Résultat + confirmation */}
-      {preview && (
-        <section className="mt-6 border rounded-lg p-5 shadow-sm bg-white">
-          <h2 className="text-xl font-semibold">Résultat</h2>
-          <div className="mt-3 grid sm:grid-cols-2 gap-3">
-            <div>Distance: <strong>{preview.distance_km.toFixed(1)} km</strong></div>
-            <div>Prix HT: <strong>{preview.price_ht.toFixed(2)} €</strong></div>
-            <div>TVA (20%): <strong>{preview.tva.toFixed(2)} €</strong></div>
-            <div>Total TTC: <strong>{preview.price_ttc.toFixed(2)} €</strong></div>
-          </div>
+      {preview && (() => {
+        // Normalisation pour éviter les toFixed sur null/undefined
+        const pv = {
+          distance_km: Number(preview.distance_km ?? 0),
+          price_ht: Number(preview.price_ht ?? 0),
+          tva: Number(preview.tva ?? 0),
+          price_ttc: Number(preview.price_ttc ?? 0),
+        }
 
-          <h3 className="text-lg font-semibold mt-6">Vos coordonnées</h3>
-          <form onSubmit={onConfirm} className="space-y-4 mt-3" noValidate>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium">Prénom *</label>
-                <input name="prenom" required className="mt-1 w-full rounded-md border px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Nom *</label>
-                <input name="nom" required className="mt-1 w-full rounded-md border px-3 py-2" />
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium">Email *</label>
-                <input type="email" name="email" required className="mt-1 w-full rounded-md border px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Téléphone *</label>
-                <input type="tel" name="telephone" required className="mt-1 w-full rounded-md border px-3 py-2" />
-              </div>
+        return (
+          <section className="mt-6 border rounded-lg p-5 shadow-sm bg-white">
+            <h2 className="text-xl font-semibold">Résultat</h2>
+            <div className="mt-3 grid sm:grid-cols-2 gap-3">
+              <div>Distance: <strong>{pv.distance_km.toFixed(1)} km</strong></div>
+              <div>Prix HT: <strong>{pv.price_ht.toFixed(2)} €</strong></div>
+              <div>TVA (20%): <strong>{pv.tva.toFixed(2)} €</strong></div>
+              <div>Total TTC: <strong>{pv.price_ttc.toFixed(2)} €</strong></div>
             </div>
 
-            <div className="flex items-start gap-2">
-              <input id="q-consent" name="consent" type="checkbox" value="1" required className="mt-1" />
-              <label htmlFor="q-consent" className="text-sm">
-                J’accepte les <a className="underline" href="/donnees-personnelles" target="_blank" rel="noopener">Conditions d’utilisation des données</a>
-                {' '}et j’ai pris connaissance des{' '}
-                <a className="underline" href="/mentions-legales" target="_blank" rel="noopener">Mentions légales</a>.
-              </label>
-            </div>
+            <h3 className="text-lg font-semibold mt-6">Vos coordonnées</h3>
+            <form onSubmit={onConfirm} className="space-y-4 mt-3" noValidate>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium">Prénom *</label>
+                  <input name="prenom" required className="mt-1 w-full rounded-md border px-3 py-2" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Nom *</label>
+                  <input name="nom" required className="mt-1 w-full rounded-md border px-3 py-2" />
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium">Email *</label>
+                  <input type="email" name="email" required className="mt-1 w/full rounded-md border px-3 py-2" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Téléphone *</label>
+                  <input type="tel" name="telephone" required className="mt-1 w/full rounded-md border px-3 py-2" />
+                </div>
+              </div>
 
-            <button type="submit" disabled={loading} className="btn">
-              {loading ? 'Génération…' : 'Confirmer et recevoir le devis PDF'}
-            </button>
-          </form>
-        </section>
-      )}
+              <div className="flex items-start gap-2">
+                <input id="q-consent" name="consent" type="checkbox" value="1" required className="mt-1" />
+                <label htmlFor="q-consent" className="text-sm">
+                  J’accepte les <a className="underline" href="/donnees-personnelles" target="_blank" rel="noopener">Conditions d’utilisation des données</a>
+                  {' '}et j’ai pris connaissance des{' '}
+                  <a className="underline" href="/mentions-legales" target="_blank" rel="noopener">Mentions légales</a>.
+                </label>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn">
+                {loading ? 'Génération…' : 'Confirmer et recevoir le devis PDF'}
+              </button>
+            </form>
+          </section>
+        )
+      })()}
 
       {err && <p className="text-red-700 mt-4">{err}</p>}
       {ok && <p className="text-green-700 mt-4">{ok}</p>}

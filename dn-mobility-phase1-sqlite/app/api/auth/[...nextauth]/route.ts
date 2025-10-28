@@ -18,7 +18,14 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
-          select: { id: true, email: true, passwordHash: true, role: true, name: true, isActive: true },
+          select: {
+            id: true,
+            email: true,
+            passwordHash: true,
+            role: true,
+            name: true,
+            isActive: true,
+          },
         })
 
         if (!user || !user.isActive || !user.passwordHash) return null
@@ -26,7 +33,7 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(credentials.password, user.passwordHash)
         if (!ok) return null
 
-        // IMPORTANT: on retourne un objet avec id/role/etc.
+        // On renvoie bien l'id pour pouvoir l’injecter dans le JWT/session
         return {
           id: user.id,
           email: user.email,
@@ -38,21 +45,22 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
-      // `user` n'est défini que lors du login initial
+      // Quand l’utilisateur vient de se connecter, propager les infos utiles dans le token
       if (user) {
+        token.id = (user as any).id
         token.role = (user as any).role
-        token.name = user.name || token.name
-        // on stocke explicitement l'id (même si NextAuth le met en token.sub)
-        ;(token as any).userId = (user as any).id
+        token.name = (user as any).name || token.name
+        token.email = (user as any).email || token.email
       }
       return token
     },
     async session({ session, token }) {
+      // Remonter les champs dans session.user (y compris id)
       if (session.user) {
-        // ✅ injecte le rôle dans la session
-        ;(session.user as any).role = (token as any).role
-        // ✅ injecte l'id dans la session pour l'utiliser côté serveur
-        ;(session.user as any).id = (token as any).userId || token.sub
+        ;(session.user as any).id = token.id
+        ;(session.user as any).role = token.role
+        session.user.name = (token.name as string) || session.user.name
+        session.user.email = (token.email as string) || session.user.email
       }
       return session
     },

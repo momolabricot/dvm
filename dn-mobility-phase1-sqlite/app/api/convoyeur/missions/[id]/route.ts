@@ -1,39 +1,38 @@
-// app/api/convoyeur/missions/route.ts
+// app/api/convoyeur/missions/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole, getSessionUser } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
 
-export async function GET() {
+type Params = { params: { id: string } }
+
+export async function GET(_req: Request, { params }: Params) {
   try {
-    await requireRole(['CONVOYEUR'])
-
-    const user = await getSessionUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await auth()
+    const email = session?.user?.email
+    if (!email) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
-    // Filtre robuste par relation: missions dont le profil assigné appartient au user courant
-    const missions = await prisma.mission.findMany({
-      where: { assignedTo: { userId: user.id } },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        scheduledAt: true,
-        status: true,
-      },
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { convoyeurProfile: { select: { id: true } } },
     })
+    const convoyeurProfileId = user?.convoyeurProfile?.id
+    if (!convoyeurProfileId) {
+      return NextResponse.json({ error: 'Profil convoyeur introuvable' }, { status: 404 })
+    }
 
-    return NextResponse.json({ missions }, { status: 200 })
+    const mission = await prisma.mission.findFirst({
+      where: { id: params.id, assignedToId: convoyeurProfileId },
+      // include: { assignedTo: true, quote: true, createdBy: true }, // si nécessaire
+    })
+    if (!mission) {
+      return NextResponse.json({ error: 'Mission introuvable' }, { status: 404 })
+    }
+
+    return NextResponse.json({ mission })
   } catch (e: any) {
-    if (e?.message === 'UNAUTHORIZED') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (e?.message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    return NextResponse.json({ error: 'Server error', detail: String(e) }, { status: 500 })
+    console.error('[GET /api/convoyeur/missions/[id]] ', e)
+    return NextResponse.json({ error: e?.message || 'Erreur serveur' }, { status: 500 })
   }
 }

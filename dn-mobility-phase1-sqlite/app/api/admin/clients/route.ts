@@ -1,40 +1,44 @@
 // app/api/admin/clients/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole } from '@/lib/auth-helpers'
 
 export async function GET(req: NextRequest) {
-  await requireRole(['ADMIN', 'ADMIN_IT'])
+  try {
+    const { searchParams } = new URL(req.url)
+    const active = searchParams.get('active')
 
-  const { searchParams } = new URL(req.url)
-  const q = (searchParams.get('q') || '').trim()
-  const onlyActive = searchParams.get('active') === '1'
+    const where =
+      active === '1'
+        ? { user: { role: 'CLIENT' as const, isActive: true } }
+        : { user: { role: 'CLIENT' as const } }
 
-  const clients = await prisma.clientProfile.findMany({
-    where: {
-      user: {
-        role: 'CLIENT',
-        ...(onlyActive ? { isActive: true } : {}),
-        ...(q
-          ? {
-              OR: [
-                { email: { contains: q, mode: 'insensitive' } },
-                { name: { contains: q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+    const raw = await prisma.clientProfile.findMany({
+      where,
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        companyName: true,
+        priceFactor: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            isActive: true,
+            role: true,
+          },
+        },
       },
-    },
-    orderBy: { id: 'asc' },
-    select: {
-      id: true,                
-      companyName: true,
-      priceFactor: true,        
-      user: {
-        select: { id: true, email: true, name: true, isActive: true, role: true },
-      },
-    },
-  })
+    })
 
-  return NextResponse.json({ clients })
+    // Normalise: companyName => "Particulier" si null/vidé
+    const rows = raw.map(r => ({
+      ...r,
+      companyName: r.companyName && r.companyName.trim() !== '' ? r.companyName : 'Particulier',
+    }))
+
+    return NextResponse.json({ rows })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Erreur serveur' }, { status: 500 })
+  }
 }

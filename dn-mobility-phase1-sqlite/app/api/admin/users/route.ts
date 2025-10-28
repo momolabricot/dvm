@@ -4,54 +4,56 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcrypt'
 import { requireRole } from '@/lib/auth-helpers'
 
-/**
- * GET /api/admin/users
- * Query:
- *  - role=ADMIN|ADMIN_IT|CLIENT|CONVOYEUR (optionnel)
- *  - q=jean@example.com (optionnel - recherche email)
- *  - include_inactive=1 (optionnel - inclure les inactifs)
- *  - page=1&pageSize=20 (optionnel)
- */
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   await requireRole(['ADMIN', 'ADMIN_IT'])
+  try {
+    const { searchParams } = new URL(req.url)
+    const role = searchParams.get('role') as 'ADMIN' | 'ADMIN_IT' | 'CLIENT' | 'CONVOYEUR' | null
+    const q = (searchParams.get('q') || '').trim()
+    const includeInactive = searchParams.get('include_inactive') === '1'
 
-  const { searchParams } = new URL(req.url)
-  const role = searchParams.get('role') || undefined
-  const q = searchParams.get('q') || undefined
-  const includeInactive = searchParams.get('include_inactive') === '1'
+    const where: any = {}
+    if (role) where.role = role
+    if (!includeInactive) where.isActive = true
+    if (q) {
+      where.OR = [
+        { email: { contains: q } },
+        { name: { contains: q } },
+        { phone: { contains: q } },
+      ]
+    }
 
-  const page = Math.max(1, Number(searchParams.get('page') || 1))
-  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || 50)))
-  const skip = (page - 1) * pageSize
-
-  const where: any = {}
-  if (role) where.role = role
-  if (!includeInactive) where.isActive = true
-  if (q) where.email = { contains: q, mode: 'insensitive' as const }
-
-  const [total, users] = await Promise.all([
-    prisma.user.count({ where }),
-    prisma.user.findMany({
+    const users = await prisma.user.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, email: true, name: true, phone: true, role: true,
-        createdAt: true, isActive: true,
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+        isActive: true,
       },
-      skip, take: pageSize,
-    }),
-  ])
+    })
 
-  return NextResponse.json({ users, total, page, pageSize })
+    return NextResponse.json({
+      users,
+      total: users.length,
+      page: 1,
+      pageSize: users.length,
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Erreur serveur' }, { status: 500 })
+  }
 }
 
-/**
- * POST /api/admin/users
- * Body: { email, password, role, name?, phone? }
- * Autorisé via x-admin-secret (dev) ou session ADMIN/ADMIN_IT (prod)
- */
+
+
 export async function POST(req: NextRequest) {
-  // autorisation
+  
   const headerSecret = req.headers.get('x-admin-secret')
   const envSecret = process.env.ADMIN_CREATE_SECRET
   let isAuthorized = false

@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { QuotePreviewInput } from '@/lib/validators'
 import { computeDistanceKm } from '@/lib/distance'
 import { pricingForKm } from '@/lib/pricing'
-import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth' // ⚠️ PAS "@/auth", bien "@/lib/auth"
+import { getClientPricingOverrides } from '@/lib/pricing-user'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -13,8 +12,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // ➜ corriger les champs null -> undefined pour coller au type DistanceInput
   const sim = parsed.data
+
+  // normalise retour_* null -> undefined pour computeDistanceKm
   const distanceInput = {
     ...sim,
     retour_depart: sim.retour_depart || undefined,
@@ -23,31 +23,15 @@ export async function POST(req: NextRequest) {
 
   const km = await computeDistanceKm(distanceInput)
 
-  // Récupère la session et applique le priceFactor client si dispo
-  let priceFactor = 1.0
-  try {
-    const session = await auth()
-    const email = session?.user?.email
-    if (email) {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: {
-          role: true,
-          clientProfile: { select: { priceFactor: true, isActive: true } },
-        },
-      })
-      if (user?.role === 'CLIENT' && user.clientProfile?.isActive) {
-        priceFactor = user.clientProfile.priceFactor ?? 1.0
-      }
-    }
-  } catch {
-    // pas bloquant
-  }
+  // overrides (priceFactor du client + pricing admin perKm/base si présent)
+  const { priceFactor, perKmOverride, baseOverride } = await getClientPricingOverrides()
 
-  const { price_ht, tva, price_ttc } = pricingForKm(km, sim, { priceFactor })
+  const pricing = pricingForKm(km, sim, { priceFactor, perKmOverride, baseOverride })
 
   return NextResponse.json({
     distance_km: km,
-    price_ht, tva, price_ttc,
+    price_ht: pricing.price_ht,
+    tva: pricing.tva,
+    price_ttc: pricing.price_ttc,
   })
 }

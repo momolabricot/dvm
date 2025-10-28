@@ -18,17 +18,30 @@ const BASES: Record<SimInput['vehicle_type'], BasePricing> = {
   vl_plateau: { base: 45, perKm: 1.5 },
 }
 
-export function pricingForKm(km: number, sim: SimInput, clientFactor = 1.0) {
-  const p = BASES[sim.vehicle_type] ?? BASES.citadine
-  let ht = p.base + p.perKm * km
+/**
+ * Calcule le prix à partir d'une distance et des paramètres de simulation.
+ * On peut passer des overrides admin (base, perKm) et un priceFactor client.
+ */
+export function pricingForKm(
+  km: number,
+  sim: SimInput,
+  opts?: { priceFactor?: number; perKmOverride?: number; baseOverride?: number }
+) {
+  const factor = typeof opts?.priceFactor === 'number' ? opts.priceFactor : 1.0
 
-  // option plateau = majoration simple (exemple)
+  const def = BASES[sim.vehicle_type] ?? BASES.citadine
+  const perKm = typeof opts?.perKmOverride === 'number' ? opts.perKmOverride : def.perKm
+  const base  = typeof opts?.baseOverride === 'number'  ? opts.baseOverride  : def.base
+
+  let ht = base + perKm * km
+
+  // option plateau : majoration simple (ex.)
   if (sim.option === 'plateau') ht *= 1.25
 
-  // aller-retour : on peut décider d'un coeff (exemple = *1.8)
+  // aller-retour : coeff (ex. 1.8)
   if (sim.round_trip) ht *= 1.8
 
-  ht = ht * clientFactor
+  ht = ht * factor
 
   const tva = ht * 0.2
   const ttc = ht + tva

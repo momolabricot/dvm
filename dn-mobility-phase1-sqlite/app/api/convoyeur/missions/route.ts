@@ -1,47 +1,62 @@
 // app/api/convoyeur/missions/route.ts
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireRole, getSessionUser } from '@/lib/auth-helpers'
+import { auth } from '@/lib/auth'
 
 export async function GET() {
   try {
-    await requireRole(['CONVOYEUR'])
-
-    const user = await getSessionUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await auth()
+    const email = session?.user?.email
+    if (!email) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
 
-    // Récupérer le profil convoyeur via userId (unique)
-    const profile = await prisma.convoyeurProfile.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
-    })
-
-    // Si pas de profil: renvoyer une liste vide (UI simple)
-    if (!profile) return NextResponse.json([], { status: 200 })
-
-    const missions = await prisma.mission.findMany({
-      where: { assignedToId: profile.id },
-      orderBy: { createdAt: 'desc' },
+    // Récupérer le profil convoyeur du user connecté (pas de isActive sur ConvoyeurProfile)
+    const user = await prisma.user.findUnique({
+      where: { email },
       select: {
         id: true,
-        title: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-        scheduledAt: true,
-        status: true,
+        convoyeurProfile: {
+          select: {
+            id: true,
+            userId: true,
+            ratePerKm: true,
+          },
+        },
       },
     })
 
-    return NextResponse.json(missions, { status: 200 })
+    const convoyeurId = user?.convoyeurProfile?.id
+    if (!convoyeurId) {
+      return NextResponse.json({ missions: [] }) // pas de profil convoyeur → pas de missions
+    }
+
+    const missions = await prisma.mission.findMany({
+      where: { assignedToId: convoyeurId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        client: {
+          select: {
+            id: true,
+            isActive: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            user: { select: { id: true, name: true, email: true } },
+            ratePerKm: true,
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true } },
+        quote: true,
+      },
+    })
+
+    return NextResponse.json({ missions })
   } catch (e: any) {
-    if (e?.message === 'UNAUTHORIZED') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (e?.message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    return NextResponse.json({ error: 'Server error', detail: String(e) }, { status: 500 })
+    console.error('[GET /api/convoyeur/missions] ', e)
+    return NextResponse.json({ error: e?.message || 'Erreur serveur' }, { status: 500 })
   }
 }

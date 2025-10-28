@@ -4,10 +4,7 @@ import { QuoteConfirmInput } from '@/lib/validators'
 import { computeDistanceKm } from '@/lib/distance'
 import { pricingForKm } from '@/lib/pricing'
 import { saveQuoteAndEmail } from '@/lib/quote-service'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { applyUserMultiplier } from '@/lib/pricing-user'
-
+import { getClientPricingOverrides } from '@/lib/pricing-user'
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,7 +23,7 @@ export async function POST(req: NextRequest) {
       vehicle_type: parsed.data.vehicle_type,
       plate: parsed.data.plate,
       option: parsed.data.option,
-      depart_label: parsed.data.depart, // si tu veux afficher le libellé user
+      depart_label: parsed.data.depart,
       arrivee_label: parsed.data.arrivee,
       retour_depart_label: parsed.data.retour_depart || undefined,
       retour_arrivee_label: parsed.data.retour_arrivee || undefined,
@@ -43,23 +40,18 @@ export async function POST(req: NextRequest) {
     }
 
     const km = await computeDistanceKm(sim)
-    const pricing = pricingForKm(km, sim)
+
+    const { priceFactor, perKmOverride, baseOverride } = await getClientPricingOverrides()
+    const pricing = pricingForKm(km, sim, { priceFactor, perKmOverride, baseOverride })
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL
-    const quote_no = await saveQuoteAndEmail(sim, contact, km, {
-      price_ht: pricing.price_ht,
-      tva: pricing.tva,
-      price_ttc: pricing.price_ttc,
-    }, baseUrl)
-
-    const session = await getServerSession(authOptions)
-const userMult = Number((session?.user as any)?.priceMultiplier ?? 1)
-// pricing déjà calculé = { price_ht, tva, price_ttc }
-const price_ttc_adj = applyUserMultiplier(pricing.price_ttc, userMult)
-const delta = price_ttc_adj - pricing.price_ttc
-pricing.price_ttc = price_ttc_adj
-pricing.price_ht = pricing.price_ht + delta / 1.2 // si TVA 20%
-pricing.tva = pricing.price_ttc - pricing.price_ht
+    const quote_no = await saveQuoteAndEmail(
+      sim,
+      contact,
+      km,
+      { price_ht: pricing.price_ht, tva: pricing.tva, price_ttc: pricing.price_ttc },
+      baseUrl
+    )
 
     return NextResponse.json({ ok: true, quote_no })
   } catch (e: any) {

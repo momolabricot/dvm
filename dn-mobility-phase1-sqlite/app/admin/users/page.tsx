@@ -67,7 +67,7 @@ export default function AdminUsersPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // ⚠️ en dev uniquement, en prod préférer la création par session admin
+          // ⚠️ dev uniquement. En prod, protéger via session/permissions.
           'x-admin-secret': process.env.NEXT_PUBLIC_ADMIN_CREATE_SECRET || 'change_me_admin_create',
         },
         body: JSON.stringify({
@@ -94,7 +94,7 @@ export default function AdminUsersPage() {
     if (!confirm('Désactiver cet utilisateur ?')) return
     const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' })
     if (!res.ok) {
-      alert('Suppression impossible')
+      alert('Désactivation impossible')
       return
     }
     mutate()
@@ -113,20 +113,40 @@ export default function AdminUsersPage() {
     mutate()
   }
 
+  async function onHardDelete(id: string) {
+    if (!confirm('⚠️ Supprimer définitivement cet utilisateur ? Cette action est irréversible.')) return
+    const res = await fetch(`/api/admin/users/${id}?hard=1`, { method: 'DELETE' })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      alert('Suppression impossible' + (j?.error ? `: ${j.error}` : ''))
+      return
+    }
+    mutate()
+  }
+
   const users = data?.users ?? []
   const loadState = isLoading ? 'loading' : error ? 'error' : users.length === 0 ? 'empty' : 'ready'
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+    <main className="mx-auto max-w-6xl p-4 sm:p-6 space-y-6">
+      {/* Titre + actions */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Utilisateurs</h1>
+        <button
+          onClick={() => mutate()}
+          className="inline-flex items-center gap-2 rounded-md border border-violet-200 bg-white px-3 py-2 text-sm hover:bg-violet-50"
+        >
+          Rafraîchir
+        </button>
+      </header>
 
       {/* Filtres */}
-      <section className="rounded-xl border p-4">
-        <div className="grid gap-3 sm:grid-cols-4 items-end">
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="grid gap-4 sm:grid-cols-4">
           <div>
-            <label className="block text-sm font-medium">Filtrer par rôle</label>
+            <label className="block text-sm font-medium text-gray-700">Filtrer par rôle</label>
             <select
-              className="mt-1 rounded-md border px-3 py-2 w-full"
+              className="mt-1 w-full rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value as Role | '')}
             >
@@ -138,46 +158,43 @@ export default function AdminUsersPage() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium">Recherche email</label>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Recherche email</label>
             <input
-              className="mt-1 rounded-md border px-3 py-2 w-full"
+              className="mt-1 w-full rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
               placeholder="ex: jean@exemple.com"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
 
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={includeInactive}
-              onChange={(e) => setIncludeInactive(e.target.checked)}
-            />
-            Inclure les inactifs
-          </label>
-
-          <div className="sm:ml-auto">
-            <button className="rounded-md border px-3 py-2 text-sm" onClick={() => mutate()}>
-              Rafraîchir
-            </button>
+          <div className="flex items-end">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                checked={includeInactive}
+                onChange={(e) => setIncludeInactive(e.target.checked)}
+              />
+              Inclure les inactifs
+            </label>
           </div>
         </div>
       </section>
 
       {/* Création */}
-      <section className="rounded-xl border p-4">
-        <h2 className="font-medium">Créer un utilisateur</h2>
-        <form onSubmit={onCreate} className="mt-3 grid gap-3 sm:grid-cols-2">
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-base font-semibold text-gray-900">Créer un utilisateur</h2>
+        <form onSubmit={onCreate} className="mt-4 grid gap-4 sm:grid-cols-2">
           <input
-            className="rounded-md border px-3 py-2"
+            className="rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
             placeholder="Email *"
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             required
           />
           <input
-            className="rounded-md border px-3 py-2"
+            className="rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
             placeholder="Mot de passe *"
             type="password"
             value={form.password}
@@ -185,7 +202,7 @@ export default function AdminUsersPage() {
             required
           />
           <select
-            className="rounded-md border px-3 py-2"
+            className="rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
           >
@@ -195,99 +212,131 @@ export default function AdminUsersPage() {
             <option value="ADMIN_IT">ADMIN_IT</option>
           </select>
           <input
-            className="rounded-md border px-3 py-2"
+            className="rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
             placeholder="Nom affiché (optionnel)"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
           <input
-            className="rounded-md border px-3 py-2"
+            className="rounded-md border-gray-300 focus:border-violet-500 focus:ring-violet-500"
             placeholder="Téléphone (optionnel)"
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
           />
-          <div className="sm:col-span-2">
-            <button disabled={loading} className="rounded-md bg-indigo-600 text-white px-4 py-2">
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <button
+              disabled={loading}
+              className="inline-flex items-center rounded-md bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-60"
+            >
               {loading ? 'Création…' : 'Créer'}
             </button>
-            {ok && <span className="ml-3 text-green-700">{ok}</span>}
-            {err && <span className="ml-3 text-red-700">{err}</span>}
+            {ok && <span className="text-sm text-emerald-700">{ok}</span>}
+            {err && <span className="text-sm text-rose-700">{err}</span>}
           </div>
         </form>
       </section>
 
       {/* Liste */}
-      <section className="rounded-xl border p-4">
-        <h2 className="font-medium mb-3">Liste</h2>
+      <section className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <h2 className="text-base font-semibold text-gray-900">Liste</h2>
+          <div className="text-xs text-gray-600">
+            {data?.total ?? 0} utilisateur(s)
+            {roleFilter ? ` • Rôle: ${roleFilter}` : ''}
+            {q ? ` • Recherche: “${q}”` : ''}
+            {!includeInactive ? ' • (inactifs masqués)' : ' • (inactifs inclus)'}
+          </div>
+        </div>
 
-        {loadState === 'loading' && <p className="text-sm text-gray-600">Chargement…</p>}
-        {loadState === 'error' && <p className="text-sm text-red-700">Erreur de chargement.</p>}
-        {loadState === 'empty' && <p className="text-sm text-gray-600">Aucun utilisateur.</p>}
+        {loadState === 'loading' && <p className="p-4 text-sm text-gray-600">Chargement…</p>}
+        {loadState === 'error' && <p className="p-4 text-sm text-rose-700">Erreur de chargement.</p>}
+        {loadState === 'empty' && <p className="p-4 text-sm text-gray-600">Aucun utilisateur.</p>}
 
         {loadState === 'ready' && (
-          <div className="overflow-x-auto">
-            <table className="min-w-[820px] w-full text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Nom</th>
-                  <th className="py-2 pr-3">Téléphone</th>
-                  <th className="py-2 pr-3">Rôle</th>
-                  <th className="py-2 pr-3">Statut</th>
-                  <th className="py-2 pr-3 text-right">Créé le</th>
-                  <th className="py-2 pl-3 text-right">Actions</th>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                {/* On donne plus de place aux actions, et on réduit un peu la date */}
+                <col className="w-[26%]" /> {/* Email */}
+                <col className="w-[14%]" /> {/* Nom */}
+                <col className="w-[14%]" /> {/* Téléphone */}
+                <col className="w-[12%]" /> {/* Rôle */}
+                <col className="w-[12%]" /> {/* Statut */}
+                <col className="w-[10%]" /> {/* Date */}
+                <col className="w-[12%]" /> {/* Actions (élargi + wrap) */}
+              </colgroup>
+              <thead className="bg-violet-50/60">
+                <tr className="text-left">
+                  <th className="py-2 pr-3 pl-4 text-xs font-semibold text-gray-700">Email</th>
+                  <th className="py-2 pr-3 text-xs font-semibold text-gray-700">Nom</th>
+                  <th className="py-2 pr-3 text-xs font-semibold text-gray-700">Téléphone</th>
+                  <th className="py-2 pr-3 text-xs font-semibold text-gray-700">Rôle</th>
+                  <th className="py-2 pr-3 text-xs font-semibold text-gray-700">Statut</th>
+                  <th className="py-2 pr-3 text-right text-xs font-semibold text-gray-700">Créé le</th>
+                  <th className="py-2 pl-3 pr-4 text-right text-xs font-semibold text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3">{u.email}</td>
-                    <td className="py-2 pr-3">{u.name || '—'}</td>
-                    <td className="py-2 pr-3">{u.phone || '—'}</td>
+                  <tr key={u.id} className="border-t border-gray-100 align-top">
+                    <td className="py-2 pr-3 pl-4 break-words">{u.email}</td>
+                    <td className="py-2 pr-3 break-words">{u.name || '—'}</td>
+                    <td className="py-2 pr-3 break-words">{u.phone || '—'}</td>
                     <td className="py-2 pr-3">
-                      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs">{u.role}</span>
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                        {u.role}
+                      </span>
                     </td>
                     <td className="py-2 pr-3">
                       {u.isActive ? (
-                        <span className="rounded bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs">Actif</span>
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
+                          Actif
+                        </span>
                       ) : (
-                        <span className="rounded bg-rose-100 text-rose-800 px-2 py-0.5 text-xs">Inactif</span>
+                        <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700">
+                          Inactif
+                        </span>
                       )}
                     </td>
-                    <td className="py-2 pr-3 text-right text-xs text-gray-500">
+                    <td className="py-2 pr-3 text-right text-xs text-gray-500 whitespace-nowrap">
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString('fr-FR') : '—'}
                     </td>
-                    <td className="py-2 pl-3 text-right">
-                      {u.isActive ? (
+                    <td className="py-2 pl-3 pr-4">
+                      {/* wrap autorisé pour éviter tout chevauchement */}
+                      <div className="flex justify-end gap-2 flex-wrap">
+                        {u.isActive ? (
+                          <button
+                            onClick={() => onSoftDelete(u.id)}
+                            className="rounded-md border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                            title="Désactiver"
+                          >
+                            Désactiver
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => onReactivate(u.id)}
+                            className="rounded-md border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                            title="Réactiver"
+                          >
+                            Réactiver
+                          </button>
+                        )}
                         <button
-                          onClick={() => onSoftDelete(u.id)}
-                          className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
+                          onClick={() => onHardDelete(u.id)}
+                          className="rounded-md border border-rose-300 text-rose-700 px-2 py-1 text-xs hover:bg-rose-50"
+                          title="Supprimer définitivement"
                         >
-                          Désactiver
+                          Supprimer
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => onReactivate(u.id)}
-                          className="rounded border px-2 py-1 text-xs hover:bg-gray-50"
-                        >
-                          Réactiver
-                        </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="mt-3 text-xs text-gray-600">
-              {data?.total ?? 0} utilisateur(s)
-              {roleFilter ? ` • Rôle: ${roleFilter}` : ''}
-              {q ? ` • Recherche: “${q}”` : ''}
-              {!includeInactive ? ' • (inactifs masqués)' : ' • (inactifs inclus)'}
-            </div>
           </div>
         )}
       </section>
-    </div>
+    </main>
   )
 }
